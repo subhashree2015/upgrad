@@ -45,8 +45,8 @@ public class ImageController {
     //Also now you need to add the tags of an image in the Model type object
     //Here a list of tags is added in the Model type object
     //this list is then sent to 'images/image.html' file and the tags are displayed
-    @RequestMapping("/images/{id}")
-    public String showImage(@PathVariable("id") int imageId, Model model) {
+    @RequestMapping("/images/{id}/{title}")
+    public String showImage(@PathVariable("id") int imageId, @PathVariable("title") String title, Model model) {
         Image image = imageService.getImage(imageId);
         model.addAttribute("image", image);
         model.addAttribute("tags", image.getTags());
@@ -92,11 +92,16 @@ public class ImageController {
     //The method first needs to convert the list of all the tags to a string containing all the tags separated by a comma and then add this string in a Model type object
     //This string is then displayed by 'edit.html' file as previous tags of an image
     @RequestMapping(value = "/editImage")
-    public String editImage(@RequestParam("imageId") Integer imageId, Model model) {
+    public String editImage(@RequestParam("imageId") Integer imageId, Model model, HttpSession session) {
+        String error = "Only the owner of the image can edit the image";
         Image image = imageService.getImage(imageId);
-
-        String tags = convertTagsToString(image.getTags());
+        User user = (User) session.getAttribute("loggeduser");
         model.addAttribute("image", image);
+        if (!isOwner(image.getUser(), user)) {
+            model.addAttribute("editError", error);
+            return "images/image";
+        }
+        String tags = convertTagsToString(image.getTags());
         model.addAttribute("tags", tags);
         return "images/edit";
     }
@@ -140,8 +145,17 @@ public class ImageController {
     //The method calls the deleteImage() method in the business logic passing the id of the image to be deleted
     //Looks for a controller method with request mapping of type '/images'
     @RequestMapping(value = "/deleteImage", method = RequestMethod.DELETE)
-    public String deleteImageSubmit(@RequestParam(name = "imageId") Integer imageId) {
-        imageService.deleteImage(imageId);
+    public String deleteImageSubmit(@RequestParam(name = "imageId") Integer imageId, Model model, HttpSession session) {
+        String error = "Only the owner of the image can delete the image";
+        Image image = imageService.getImage(imageId);
+        User user = (User) session.getAttribute("loggeduser");
+        if (isOwner(image.getUser(), user)) {
+            imageService.deleteImage(imageId);
+        } else {
+        	model.addAttribute("image", image);
+            model.addAttribute("deleteError", error);
+            return "images/image";
+        }
         return "redirect:/images";
     }
 
@@ -186,5 +200,20 @@ public class ImageController {
         tagString.append(lastTag.getName());
 
         return tagString.toString();
+    }
+    
+    /**
+     * Check whether user is the owner or not
+     * 
+     * @param currentUser
+     * @param imageOwner
+     * @return true if owner, false otherwise
+     */
+    private boolean isOwner(User currentUser, User imageOwner) {
+        boolean isOwner = false;
+        if (currentUser!=null && imageOwner !=null) {
+            isOwner = imageOwner.getUsername().equals(currentUser.getUsername());
+        }
+        return isOwner;
     }
 }
